@@ -1,0 +1,32 @@
+---
+description: Always ask the user before any Git action
+alwaysApply: true
+---
+
+# Git workflow
+
+Never perform Git actions on your own. Always ask the user first and wait for an explicit yes.
+
+This includes:
+
+- Creating, switching, renaming, or deleting branches
+- Committing, amending, rebasing, merging, or cherry-picking
+- Pushing, pulling, fetching, or opening pull requests
+- Staging files, resetting, or discarding changes
+
+Work on the branch the user names. If they say to stay on `development`, stay there.
+
+Do not create, switch, or rename a branch unless the user gives the name and asks you to do it.
+
+When Git is needed (branch, commit, push, PR), stop and ask:
+
+1. Which branch to use, or what to name a new branch
+2. Whether to commit, and what to include
+3. Whether to push or open a PR
+
+Example:
+
+- User: "Create a branch called `feature/authentication`, then start the work."
+- Agent: create that branch, then continue.
+
+Never assume a branch name such as `feature/authentication`.
