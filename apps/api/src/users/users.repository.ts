@@ -36,7 +36,7 @@ export class UsersRepository {
       `
         SELECT id, first_name, last_name, email, password_hash, google_id, auth_provider, role
         FROM users
-        WHERE email = $1
+        WHERE LOWER(email) = LOWER($1)
       `,
       [email],
     );
@@ -52,6 +52,8 @@ export class UsersRepository {
       lastName: row.last_name,
       email: row.email,
       role: row.role,
+      hasPassword: row.password_hash != null,
+      hasGoogle: row.google_id != null,
     };
   }
 

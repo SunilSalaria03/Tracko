@@ -6,6 +6,10 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { SignInDto } from './dto/signin.dto';
 import { SignUpDto } from './dto/signup.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -37,8 +41,8 @@ export class AuthController {
   async google(
     @Body() dto: GoogleAuthDto,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<PublicUser> {
-    const { user, token } = await this.authService.signInWithGoogle(
+  ): Promise<PublicUser & { googleLinked: boolean }> {
+    const { user, token, googleLinked } = await this.authService.signInWithGoogle(
       dto.accessToken,
     );
 
@@ -48,14 +52,15 @@ export class AuthController {
       this.authService.getCookieOptions(),
     );
 
-    return user;
+    return { ...user, googleLinked };
   }
 
   @Post('google/dummy')
   async dummyGoogle(
     @Res({ passthrough: true }) response: Response,
-  ): Promise<PublicUser> {
-    const { user, token } = await this.authService.signInWithDummyGoogle();
+  ): Promise<PublicUser & { googleLinked: boolean }> {
+    const { user, token, googleLinked } =
+      await this.authService.signInWithDummyGoogle();
 
     response.cookie(
       this.authService.getCookieName(),
@@ -63,7 +68,35 @@ export class AuthController {
       this.authService.getCookieOptions(),
     );
 
-    return user;
+    return { ...user, googleLinked };
+  }
+
+  @Post('forgot-password')
+  requestPasswordReset(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<{ ok: true; devCode?: string }> {
+    return this.authService.requestPasswordReset(dto);
+  }
+
+  @Post('verify-reset-code')
+  verifyResetCode(
+    @Body() dto: VerifyResetCodeDto,
+  ): Promise<{ resetToken: string }> {
+    return this.authService.verifyResetCode(dto);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<{ ok: true }> {
+    return this.authService.resetPassword(dto);
+  }
+
+  @Post('set-password')
+  @UseGuards(JwtAuthGuard)
+  setPassword(
+    @CurrentUser() user: PublicUser,
+    @Body() dto: SetPasswordDto,
+  ): Promise<PublicUser> {
+    return this.authService.setPassword(user.id, dto);
   }
 
   @Post('logout')

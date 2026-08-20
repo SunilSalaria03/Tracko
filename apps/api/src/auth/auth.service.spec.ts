@@ -5,6 +5,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
 import { AuthRepository } from './auth.repository';
 import { AuthService } from './auth.service';
+import {
+  EMAIL_ALREADY_REGISTERED_MESSAGE,
+  INVALID_CREDENTIALS_MESSAGE,
+  INVALID_RESET_CODE_MESSAGE,
+} from './auth.constants';
 import { SignUpDto } from './dto/signup.dto';
 import { GoogleAuthClient } from './google-auth.client';
 import { PublicUser } from '../users/user.types';
@@ -22,10 +27,19 @@ type CreateUserInput = {
 describe('AuthService', () => {
   let service: AuthService;
   let authRepository: {
+    findById: jest.Mock;
     findByEmail: jest.Mock;
     findByGoogleId: jest.Mock;
     createUser: jest.Mock;
     linkGoogleId: jest.Mock;
+    setPassword: jest.Mock;
+    updatePassword: jest.Mock;
+    invalidateResetChallenges: jest.Mock;
+    createResetChallenge: jest.Mock;
+    findActiveResetChallenge: jest.Mock;
+    markChallengeVerified: jest.Mock;
+    findVerifiedChallengeByTokenHash: jest.Mock;
+    consumeChallenge: jest.Mock;
   };
   let jwtService: { signAsync: jest.Mock };
   let googleAuthClient: { verifyAccessToken: jest.Mock };
@@ -39,10 +53,19 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     authRepository = {
+      findById: jest.fn(),
       findByEmail: jest.fn(),
       findByGoogleId: jest.fn(),
       createUser: jest.fn(),
       linkGoogleId: jest.fn(),
+      setPassword: jest.fn(),
+      updatePassword: jest.fn(),
+      invalidateResetChallenges: jest.fn(),
+      createResetChallenge: jest.fn(),
+      findActiveResetChallenge: jest.fn(),
+      markChallengeVerified: jest.fn(),
+      findVerifiedChallengeByTokenHash: jest.fn(),
+      consumeChallenge: jest.fn(),
     };
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('signed-token'),
@@ -85,6 +108,8 @@ describe('AuthService', () => {
           lastName: input.lastName,
           email: input.email,
           role: 'EMPLOYEE',
+          hasPassword: true,
+          hasGoogle: false,
         };
       },
     );
@@ -106,14 +131,16 @@ describe('AuthService', () => {
       lastName: 'Salaria',
       email: signUpDto.email,
       role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
       passwordHash: 'hash',
       googleId: null,
       authProvider: 'LOCAL',
     });
 
-    await expect(service.signUp(signUpDto)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(service.signUp(signUpDto)).rejects.toMatchObject({
+      message: EMAIL_ALREADY_REGISTERED_MESSAGE,
+    });
     expect(authRepository.createUser).not.toHaveBeenCalled();
   });
 
@@ -125,6 +152,8 @@ describe('AuthService', () => {
       lastName: 'Salaria',
       email: signUpDto.email,
       role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
       passwordHash,
       googleId: null,
       authProvider: 'LOCAL',
@@ -142,6 +171,8 @@ describe('AuthService', () => {
       lastName: 'Salaria',
       email: signUpDto.email,
       role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
     });
     expect(jwtService.signAsync).toHaveBeenCalledWith({
       sub: 'user-1',
@@ -168,6 +199,8 @@ describe('AuthService', () => {
       lastName: 'Salaria',
       email: signUpDto.email,
       role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
       passwordHash: await bcrypt.hash('OtherPassword123!', 12),
       googleId: null,
       authProvider: 'LOCAL',
@@ -196,6 +229,8 @@ describe('AuthService', () => {
         lastName: 'Vishwakarma',
         email: 'nitesh@gmail.com',
         role: 'EMPLOYEE',
+        hasPassword: false,
+        hasGoogle: true,
         passwordHash: null,
         googleId: 'google-1',
         authProvider: 'GOOGLE',
@@ -207,6 +242,8 @@ describe('AuthService', () => {
       lastName: 'Vishwakarma',
       email: 'nitesh@gmail.com',
       role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
     });
 
     const result = await service.signInWithGoogle('google-id-token');
@@ -236,6 +273,8 @@ describe('AuthService', () => {
       lastName: 'Vishwakarma',
       email: 'nitesh@gmail.com',
       role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
       passwordHash: null,
       googleId: 'google-1',
       authProvider: 'GOOGLE',
@@ -245,6 +284,7 @@ describe('AuthService', () => {
 
     expect(authRepository.createUser).not.toHaveBeenCalled();
     expect(result.user.id).toBe('user-google');
+    expect(result.googleLinked).toBe(false);
   });
 
   it('creates a dummy Google user in development', async () => {
@@ -256,6 +296,8 @@ describe('AuthService', () => {
         lastName: 'Google',
         email: 'dummy.google@tracko.local',
         role: 'EMPLOYEE',
+        hasPassword: false,
+        hasGoogle: true,
         passwordHash: null,
         googleId: 'dummy-google-local',
         authProvider: 'GOOGLE',
@@ -267,6 +309,8 @@ describe('AuthService', () => {
       lastName: 'Google',
       email: 'dummy.google@tracko.local',
       role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
     });
 
     const result = await service.signInWithDummyGoogle();
@@ -279,5 +323,250 @@ describe('AuthService', () => {
         passwordHash: null,
       }),
     );
+  });
+
+  it('rejects password sign-in for a Google-only account without revealing the provider', async () => {
+    authRepository.findByEmail.mockResolvedValue({
+      id: 'user-google',
+      firstName: 'Nitesh',
+      lastName: 'Vishwakarma',
+      email: 'nitesh@gmail.com',
+      role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
+      passwordHash: null,
+      googleId: 'google-1',
+      authProvider: 'GOOGLE',
+    });
+
+    await expect(
+      service.signIn({
+        email: 'nitesh@gmail.com',
+        password: 'Password123!',
+      }),
+    ).rejects.toMatchObject({
+      message: INVALID_CREDENTIALS_MESSAGE,
+    });
+  });
+
+  it('links Google to an existing password account with the same verified email', async () => {
+    googleAuthClient.verifyAccessToken.mockResolvedValue({
+      googleId: 'google-1',
+      email: signUpDto.email,
+      firstName: 'Mukesh',
+      lastName: 'Salaria',
+    });
+    authRepository.findByGoogleId.mockResolvedValue(null);
+    authRepository.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'Mukesh',
+      lastName: 'Salaria',
+      email: signUpDto.email,
+      role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
+      passwordHash: 'hash',
+      googleId: null,
+      authProvider: 'LOCAL',
+    });
+    authRepository.findById.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'Mukesh',
+      lastName: 'Salaria',
+      email: signUpDto.email,
+      role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: true,
+      passwordHash: 'hash',
+      googleId: 'google-1',
+      authProvider: 'LOCAL',
+    });
+
+    const result = await service.signInWithGoogle('google-id-token');
+
+    expect(authRepository.createUser).not.toHaveBeenCalled();
+    expect(authRepository.linkGoogleId).toHaveBeenCalledWith(
+      'user-1',
+      'google-1',
+    );
+    expect(result.user).toMatchObject({
+      id: 'user-1',
+      hasPassword: true,
+      hasGoogle: true,
+    });
+    expect(result.googleLinked).toBe(true);
+  });
+
+  it('lets a Google-only user set a password', async () => {
+    authRepository.findById.mockResolvedValue({
+      id: 'user-google',
+      firstName: 'Nitesh',
+      lastName: 'Vishwakarma',
+      email: 'nitesh@gmail.com',
+      role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
+      passwordHash: null,
+      googleId: 'google-1',
+      authProvider: 'GOOGLE',
+    });
+    authRepository.setPassword.mockImplementation(
+      async (_userId: string, passwordHash: string) => ({
+        id: 'user-google',
+        firstName: 'Nitesh',
+        lastName: 'Vishwakarma',
+        email: 'nitesh@gmail.com',
+        role: 'EMPLOYEE',
+        hasPassword: true,
+        hasGoogle: true,
+        passwordHash,
+        googleId: 'google-1',
+        authProvider: 'GOOGLE',
+      }),
+    );
+
+    const user = await service.setPassword('user-google', {
+      password: 'Password123!',
+    });
+
+    expect(user).toMatchObject({
+      id: 'user-google',
+      hasPassword: true,
+      hasGoogle: true,
+    });
+    expect(user).not.toHaveProperty('passwordHash');
+    expect(authRepository.setPassword).toHaveBeenCalledWith(
+      'user-google',
+      expect.any(String),
+    );
+    const [, hash] = authRepository.setPassword.mock.calls[0] as [
+      string,
+      string,
+    ];
+    expect(await bcrypt.compare('Password123!', hash)).toBe(true);
+  });
+
+  it('rejects setting a password when one already exists', async () => {
+    authRepository.findById.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'Mukesh',
+      lastName: 'Salaria',
+      email: signUpDto.email,
+      role: 'EMPLOYEE',
+      hasPassword: true,
+      hasGoogle: false,
+      passwordHash: 'hash',
+      googleId: null,
+      authProvider: 'LOCAL',
+    });
+
+    await expect(
+      service.setPassword('user-1', { password: 'Password123!' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(authRepository.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('does not create a reset challenge for an unknown email', async () => {
+    authRepository.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.requestPasswordReset({ email: 'missing@example.com' }),
+    ).resolves.toEqual({ ok: true });
+    expect(authRepository.createResetChallenge).not.toHaveBeenCalled();
+  });
+
+  it('creates a reset code for an existing Google-only account', async () => {
+    authRepository.findByEmail.mockResolvedValue({
+      id: 'user-google',
+      firstName: 'Nitesh',
+      lastName: 'Vishwakarma',
+      email: 'nitesh@gmail.com',
+      role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
+      passwordHash: null,
+      googleId: 'google-1',
+      authProvider: 'GOOGLE',
+    });
+
+    const result = await service.requestPasswordReset({
+      email: 'nitesh@gmail.com',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.devCode).toMatch(/^\d{6}$/);
+    expect(authRepository.createResetChallenge).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid reset code without revealing the account', async () => {
+    authRepository.findActiveResetChallenge.mockResolvedValue(null);
+
+    await expect(
+      service.verifyResetCode({
+        email: 'nitesh@gmail.com',
+        code: '123456',
+      }),
+    ).rejects.toMatchObject({
+      message: INVALID_RESET_CODE_MESSAGE,
+    });
+  });
+
+  it('sets a password after a verified reset code', async () => {
+    const codeHash = await bcrypt.hash('123456', 12);
+    authRepository.findActiveResetChallenge.mockResolvedValue({
+      id: 'challenge-1',
+      email: 'nitesh@gmail.com',
+      codeHash,
+      resetTokenHash: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      verifiedAt: null,
+      consumedAt: null,
+    });
+
+    const { resetToken } = await service.verifyResetCode({
+      email: 'nitesh@gmail.com',
+      code: '123456',
+    });
+
+    expect(resetToken).toHaveLength(64);
+    expect(authRepository.markChallengeVerified).toHaveBeenCalledWith(
+      'challenge-1',
+      expect.any(String),
+    );
+
+    authRepository.findVerifiedChallengeByTokenHash.mockResolvedValue({
+      id: 'challenge-1',
+      email: 'nitesh@gmail.com',
+      codeHash,
+      resetTokenHash: 'hashed-token',
+      expiresAt: new Date(Date.now() + 60_000),
+      verifiedAt: new Date(),
+      consumedAt: null,
+    });
+    authRepository.findByEmail.mockResolvedValue({
+      id: 'user-google',
+      firstName: 'Nitesh',
+      lastName: 'Vishwakarma',
+      email: 'nitesh@gmail.com',
+      role: 'EMPLOYEE',
+      hasPassword: false,
+      hasGoogle: true,
+      passwordHash: null,
+      googleId: 'google-1',
+      authProvider: 'GOOGLE',
+    });
+
+    await expect(
+      service.resetPassword({
+        resetToken,
+        password: 'Password123!',
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(authRepository.updatePassword).toHaveBeenCalledWith(
+      'user-google',
+      expect.any(String),
+    );
+    expect(authRepository.consumeChallenge).toHaveBeenCalledWith('challenge-1');
   });
 });

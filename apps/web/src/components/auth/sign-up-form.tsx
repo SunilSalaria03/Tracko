@@ -26,6 +26,7 @@ export function SignUpForm() {
   const router = useRouter();
   const { data: currentUser } = useCurrentUser();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [accountExists, setAccountExists] = useState(false);
   const {
     register,
     handleSubmit,
@@ -48,11 +49,13 @@ export function SignUpForm() {
 
   async function onSubmit(values: SignUpValues) {
     setServerError(null);
+    setAccountExists(false);
 
     try {
       await signUp(values);
       router.push("/sign-in?registered=1");
     } catch (error) {
+      setAccountExists(error instanceof ApiError && error.status === 409);
       setServerError(
         error instanceof ApiError
           ? error.message
@@ -74,7 +77,16 @@ export function SignUpForm() {
 
       {serverError ? (
         <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{serverError}</AlertDescription>
+          <AlertDescription>
+            {serverError}
+            {accountExists ? (
+              <p className="mt-2">
+                <Link href="/sign-in" className={authLinkClassName}>
+                  Sign in
+                </Link>
+              </p>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
 

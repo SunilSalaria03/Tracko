@@ -1,22 +1,16 @@
 "use client";
 
-import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
+import { Suspense } from "react";
 
 export default function DashboardPage() {
-  const { data: user } = useCurrentUser();
-
-  if (!user) {
-    return null;
-  }
-
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-3xl font-semibold tracking-tight">
-        Welcome to TRACKO
-      </h1>
-      <p className="text-lg text-muted-foreground">
-        Hi {user.firstName}, you&apos;re successfully signed in.
-      </p>
-    </div>
+    <Suspense
+      fallback={
+        <p className="text-sm text-muted-foreground">Loading dashboard…</p>
+      }
+    >
+      <DashboardPanel />
+    </Suspense>
   );
 }

@@ -2,7 +2,7 @@
 
 import { signInWithDummyGoogle, signInWithGoogle } from "@/lib/api/auth.api";
 import { ApiError } from "@/lib/api/client";
-import { currentUserQueryKey } from "@/lib/auth/types";
+import { currentUserQueryKey, type GoogleAuthResponse } from "@/lib/auth/types";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -31,6 +31,17 @@ function GoogleIcon() {
   );
 }
 
+function finishGoogleAuth(
+  result: GoogleAuthResponse,
+  queryClient: ReturnType<typeof useQueryClient>,
+  router: ReturnType<typeof useRouter>,
+) {
+  const { googleLinked, ...user } = result;
+  queryClient.setQueryData(currentUserQueryKey, user);
+  router.push(googleLinked ? "/dashboard?googleLinked=1" : "/dashboard");
+  router.refresh();
+}
+
 function DummyGoogleAuthButton({
   label,
   onError,
@@ -47,10 +58,8 @@ function DummyGoogleAuthButton({
     onError("");
 
     try {
-      const user = await signInWithDummyGoogle();
-      queryClient.setQueryData(currentUserQueryKey, user);
-      router.push("/dashboard");
-      router.refresh();
+      const result = await signInWithDummyGoogle();
+      finishGoogleAuth(result, queryClient, router);
     } catch (error) {
       onError(
         error instanceof ApiError
@@ -99,10 +108,8 @@ function EnabledGoogleAuthButton({
       onError("");
 
       try {
-        const user = await signInWithGoogle(tokenResponse.access_token);
-        queryClient.setQueryData(currentUserQueryKey, user);
-        router.push("/dashboard");
-        router.refresh();
+        const result = await signInWithGoogle(tokenResponse.access_token);
+        finishGoogleAuth(result, queryClient, router);
       } catch (error) {
         onError(
           error instanceof ApiError

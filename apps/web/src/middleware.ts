@@ -11,7 +11,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/dashboard") && !token) {
+  if (
+    (pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/settings") ||
+      pathname.startsWith("/projects") ||
+      pathname.startsWith("/timesheet")) &&
+    !token
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
     return NextResponse.redirect(url);
@@ -21,5 +27,13 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/sign-in", "/sign-up", "/dashboard/:path*"],
+  matcher: [
+    "/",
+    "/sign-in",
+    "/sign-up",
+    "/dashboard/:path*",
+    "/settings/:path*",
+    "/projects/:path*",
+    "/timesheet/:path*",
+  ],
 };

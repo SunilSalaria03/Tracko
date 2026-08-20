@@ -7,4 +7,10 @@ export type PublicUser = {
   lastName: string;
   email: string;
   role: "ADMIN" | "EMPLOYEE";
+  hasPassword: boolean;
+  hasGoogle: boolean;
+};
+
+export type GoogleAuthResponse = PublicUser & {
+  googleLinked: boolean;
 };

@@ -128,3 +128,28 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .theme-select {
+    color-scheme: light;
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  .dark .theme-select {
+    color-scheme: dark;
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border-color: var(--border);
+  }
+
+  .theme-select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  .dark .theme-select option {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+}

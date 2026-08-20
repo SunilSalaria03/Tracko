@@ -43,7 +43,9 @@ export function UserMenu({ user }: { user: PublicUser }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
         <DropdownMenuItem disabled>Profile</DropdownMenuItem>
-        <DropdownMenuItem disabled>Settings</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/settings")}>
+          Settings
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => void handleLogout()}>
           Logout

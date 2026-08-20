@@ -37,6 +37,9 @@ export function SignInForm() {
     if (searchParams.get("registered") === "1") {
       return "Account created. Please sign in.";
     }
+    if (searchParams.get("passwordSet") === "1") {
+      return "Password saved. Please sign in.";
+    }
     return null;
   });
   const [serverError, setServerError] = useState<string | null>(null);
@@ -147,6 +150,12 @@ export function SignInForm() {
             {isSubmitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-[13px]">
+          <Link href="/forgot-password" className="text-[#8a8a8a] hover:underline">
+            Forgot password?
+          </Link>
+        </p>
       </div>
 
       <p className="mt-6 text-[15px] text-[#3d3d3d] dark:text-muted-foreground">
