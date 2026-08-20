@@ -17,7 +17,7 @@ import { CreateTimesheetEntryDto } from './dto/create-timesheet-entry.dto';
 import { ListTimesheetEntriesDto } from './dto/list-timesheet-entries.dto';
 import { UpdateTimesheetEntryDto } from './dto/update-timesheet-entry.dto';
 import { TimesheetsService } from './timesheets.service';
-import type { TimesheetEntry } from './timesheets.types';
+import type { TimesheetEntriesPage, TimesheetEntry } from './timesheets.types';
 
 @Controller('timesheet')
 @UseGuards(JwtAuthGuard)
@@ -40,7 +40,7 @@ export class TimesheetsController {
   listEntries(
     @CurrentUser() user: PublicUser,
     @Query() query: ListTimesheetEntriesDto,
-  ): Promise<TimesheetEntry[]> {
+  ): Promise<TimesheetEntriesPage> {
     return this.timesheetsService.listEntries(user, query);
   }
 

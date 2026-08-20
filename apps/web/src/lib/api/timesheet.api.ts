@@ -31,9 +31,31 @@ export type TimesheetEntry = {
   updatedAt: string;
 };
 
+export type TimesheetEntriesPage = {
+  items: TimesheetEntry[];
+  total: number;
+  totalHours: number;
+  page: number;
+  pageSize: number;
+};
+
 export const timesheetOptionsQueryKey = ["timesheet", "options"] as const;
-export const timesheetEntriesQueryKey = (from: string, to: string) =>
-  ["timesheet", "entries", from, to] as const;
+export const timesheetEntriesQueryKey = (input: {
+  from: string;
+  to: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) =>
+  [
+    "timesheet",
+    "entries",
+    input.from,
+    input.to,
+    input.search ?? "",
+    input.page ?? null,
+    input.pageSize ?? null,
+  ] as const;
 
 export async function getTimesheetOptions(): Promise<TimesheetOptions> {
   const response = await apiFetch("/api/timesheet/options");
@@ -43,13 +65,25 @@ export async function getTimesheetOptions(): Promise<TimesheetOptions> {
 export async function listTimesheetEntries(input: {
   from: string;
   to: string;
-}): Promise<TimesheetEntry[]> {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TimesheetEntriesPage> {
   const params = new URLSearchParams({
     from: input.from,
     to: input.to,
   });
+  if (input.search?.trim()) {
+    params.set("search", input.search.trim());
+  }
+  if (input.page !== undefined) {
+    params.set("page", String(input.page));
+  }
+  if (input.pageSize !== undefined) {
+    params.set("pageSize", String(input.pageSize));
+  }
   const response = await apiFetch(`/api/timesheet/entries?${params.toString()}`);
-  return parseJson<TimesheetEntry[]>(response);
+  return parseJson<TimesheetEntriesPage>(response);
 }
 
 export async function getTimesheetEntry(id: string): Promise<TimesheetEntry> {

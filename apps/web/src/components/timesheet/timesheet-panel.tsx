@@ -146,7 +146,10 @@ export function TimesheetPanel() {
   });
 
   const entriesQuery = useQuery({
-    queryKey: timesheetEntriesQueryKey(listRange.from, listRange.to),
+    queryKey: timesheetEntriesQueryKey({
+      from: listRange.from,
+      to: listRange.to,
+    }),
     queryFn: () =>
       listTimesheetEntries({ from: listRange.from, to: listRange.to }),
     enabled: Boolean(user),
@@ -205,7 +208,7 @@ export function TimesheetPanel() {
     [optionsQuery.data],
   );
   const entries = useMemo(
-    () => entriesQuery.data ?? [],
+    () => entriesQuery.data?.items ?? [],
     [entriesQuery.data],
   );
   const groupedEntries = useMemo(() => groupEntries(entries), [entries]);
@@ -439,7 +442,7 @@ export function TimesheetPanel() {
               </blockquote>
             </div>
           ) : (
-            <div className="bg-card">
+            <div className="min-w-0 overflow-x-hidden bg-card">
               {dayEntries.map((entry) => (
                 <EntryRow
                   key={entry.id}
@@ -542,26 +545,30 @@ function EntryRow({
   const notes = splitNotes(entry.description);
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-3">
+    <div className="flex min-w-0 flex-col gap-3 overflow-x-hidden border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1 overflow-x-hidden">
+        <div className="flex min-w-0 items-start gap-3">
           <span
             className="mt-1 size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: entry.projectColor }}
           />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 overflow-x-hidden">
             <p className="truncate text-[15px] font-semibold text-foreground">
               {entry.projectName}
             </p>
-            <p className="mt-0.5 text-sm font-medium text-muted-foreground">
+            <p className="mt-0.5 truncate text-sm font-medium text-muted-foreground">
               {entry.taskName}
             </p>
             {notes.length > 0 ? (
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-sm text-muted-foreground">
-                {notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ol>
+              <div className="mt-2 max-h-40 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-1">
+                <ol className="list-decimal space-y-1 break-all pl-4 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                  {notes.map((note) => (
+                    <li key={note} className="min-w-0">
+                      {note}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             ) : null}
           </div>
         </div>
@@ -625,17 +632,24 @@ function MonthCalendar({
           const isToday = cell.date === toIsoDate(new Date());
 
           return (
-            <button
+            <div
               key={cell.date}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectDate(cell.date)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectDate(cell.date);
+                }
+              }}
               className={cn(
-                "min-h-16 min-w-0 overflow-hidden bg-card p-1.5 text-left transition hover:bg-muted/50 sm:min-h-24 sm:p-2.5 lg:min-h-28 lg:p-3",
+                "flex min-h-16 min-w-0 cursor-pointer flex-col overflow-hidden bg-card p-1.5 text-left transition hover:bg-muted/50 sm:min-h-24 sm:p-2.5 lg:min-h-28 lg:p-3",
                 !cell.inMonth && "bg-muted/20 text-muted-foreground",
                 isSelected && "ring-2 ring-inset ring-[#fa5d00]",
               )}
             >
-              <div className="flex min-w-0 items-center justify-between gap-0.5">
+              <div className="flex min-w-0 shrink-0 items-center justify-between gap-0.5">
                 <span
                   className={cn(
                     "shrink-0 text-xs font-medium sm:text-sm",
@@ -650,11 +664,13 @@ function MonthCalendar({
                   </span>
                 ) : null}
               </div>
-              <div className="mt-1 hidden min-w-0 space-y-1 sm:mt-2 sm:block">
-                {dayEntries.slice(0, 2).map((entry) => (
+              {/* Cap visible chips at ~8 lines, then scroll inside the cell. */}
+              <div className="mt-1 hidden min-w-0 max-h-[11rem] space-y-1 overflow-y-auto overscroll-contain sm:mt-2 sm:block">
+                {dayEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="truncate rounded px-1.5 py-0.5 text-[11px]"
+                    className="truncate rounded px-1.5 py-0.5 text-[11px] leading-4"
+                    title={entry.taskName}
                     style={{
                       backgroundColor: `${entry.projectColor}22`,
                       color: entry.projectColor,
@@ -663,11 +679,6 @@ function MonthCalendar({
                     {entry.taskName}
                   </div>
                 ))}
-                {dayEntries.length > 2 ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    +{dayEntries.length - 2} more
-                  </p>
-                ) : null}
               </div>
               {dayEntries.length > 0 ? (
                 <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden">
@@ -681,7 +692,7 @@ function MonthCalendar({
                   ))}
                 </div>
               ) : null}
-            </button>
+            </div>
           );
         })}
       </div>

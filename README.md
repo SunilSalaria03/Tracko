@@ -162,27 +162,51 @@ Sign in at `/sign-in` with those details. Only this role can open **Projects** i
 
 ## Projects and tasks (admin)
 
-There are two masters:
+Admins manage two lists:
 
 1. **Project** — for example Internal, Client Delivery
-2. **Task** — the job on that project, for example Development, QA Testing, Client Support
+2. **Task** — the work type on that project, for example Development or QA Testing
 
-Tasks belong to a project (same idea as Project / Task on a timesheet). Open `/projects` (admin only) to:
+Open `/projects` (admin only) to add, edit, or delete projects and their tasks.
 
-- Add, edit, and delete projects
-- Select a project and manage its tasks (add, edit, delete)
+Starter tasks are seeded for Internal and Client Delivery.
 
-Starter task types are seeded:
+## Timesheet
 
-- Internal: Development, Code Review, Team Meeting, Documentation, Bug Fixing, Research, Planning
-- Client Delivery: Feature Development, UI Design, QA Testing, Client Support, Project Management, Requirements, Deployment, UAT
+Every signed-in user can log time on `/timesheet`.
+
+- Views: **Day**, **Week**, and **Calendar** (month)
+- Each entry needs a project, task, notes, time, and date
+- Notes are required
+- You cannot log time for future dates
+- One day cannot go over 24 hours
+- After you save an entry, its time (hours) cannot be changed
+- You can edit project, task, notes, and date later, or delete the entry
+- Day view: long notes scroll inside the entry row
+- Calendar view: a day cell shows entry chips; after about 8 lines it scrolls inside that cell
+
+## Dashboard
+
+`/dashboard` is your home after sign-in. It shows:
+
+- A short greeting and how much you logged today
+- Four hour cards: this week, last week, this month, last month
+- A table of this month’s entries
+- Search and pagination on that table (each change calls the API)
+- Search matches project, task, notes, date, or hours
+- Admins also see active project/task counts (week approvals are not built yet)
 
 ## Pages after you sign in
 
-- `/dashboard` — home
-- `/settings` — sign-in methods, and set password if you only used Google
-- `/projects` — admin only: project and task masters
-- Sidebar: Dashboard and Settings for everyone. **Projects** for admin. Timesheet is still “Soon”
+- `/dashboard` — hour summary and this month’s entries
+- `/timesheet` — add and manage your time
+- `/settings` — sign-in methods, and set a password if you only used Google
+- `/projects` — admin only: projects and tasks
+
+Sidebar links:
+
+- Everyone: Dashboard, Timesheet, Settings
+- Admin also: Projects
 
 ### Mobile and tablet sidebar
 
@@ -210,11 +234,17 @@ On phone and tablet the sidebar starts **closed**.
 | GET | `/api/projects` | Cookie | List projects |
 | POST | `/api/projects` | Admin | Create project |
 | PATCH | `/api/projects/:id` | Admin | Update project |
-| DELETE | `/api/projects/:id` | Admin | Delete project (cascades tasks) |
+| DELETE | `/api/projects/:id` | Admin | Delete project (also removes its tasks) |
 | GET | `/api/tasks` | Cookie | List tasks (`?projectId=` optional) |
 | POST | `/api/tasks` | Admin | Create task |
 | PATCH | `/api/tasks/:id` | Admin | Update task |
 | DELETE | `/api/tasks/:id` | Admin | Delete task |
+| GET | `/api/timesheet/options` | Cookie | Projects and tasks for the entry form |
+| GET | `/api/timesheet/entries` | Cookie | List entries. Query: `from`, `to` (YYYY-MM-DD). Optional: `search`, `page`, `pageSize` (max 100). Response: `{ items, total, totalHours, page, pageSize }` |
+| GET | `/api/timesheet/entries/:id` | Cookie | Get one entry |
+| POST | `/api/timesheet/entries` | Cookie | Create an entry |
+| PATCH | `/api/timesheet/entries/:id` | Cookie | Update an entry (hours stay fixed) |
+| DELETE | `/api/timesheet/entries/:id` | Cookie | Delete an entry |
 
 Local database credentials live in `apps/api/.env` and are for development only. Do not use them in production.
 

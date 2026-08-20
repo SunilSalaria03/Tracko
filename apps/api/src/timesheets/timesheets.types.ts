@@ -12,3 +12,11 @@ export type TimesheetEntry = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type TimesheetEntriesPage = {
+  items: TimesheetEntry[];
+  total: number;
+  totalHours: number;
+  page: number;
+  pageSize: number;
+};

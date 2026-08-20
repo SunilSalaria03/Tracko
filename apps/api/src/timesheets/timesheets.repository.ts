@@ -110,7 +110,73 @@ export class TimesheetsRepository {
     };
   }
 
-  async listEntries(userId: string, from?: string, to?: string): Promise<TimesheetEntry[]> {
+  async listEntries(
+    userId: string,
+    options: {
+      from?: string;
+      to?: string;
+      search?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ): Promise<{
+    items: TimesheetEntry[];
+    total: number;
+    totalHours: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const search = options.search?.trim() || null;
+    const page = options.page && options.page > 0 ? options.page : 1;
+    const pageSize =
+      options.pageSize && options.pageSize > 0 ? options.pageSize : null;
+    const offset = pageSize ? (page - 1) * pageSize : 0;
+
+    const filters = `
+      WHERE te.user_id = $1
+        AND ($2::date IS NULL OR te.entry_date >= $2::date)
+        AND ($3::date IS NULL OR te.entry_date <= $3::date)
+        AND (
+          $4::text IS NULL
+          OR p.name ILIKE '%' || $4 || '%'
+          OR t.name ILIKE '%' || $4 || '%'
+          OR te.description ILIKE '%' || $4 || '%'
+          OR TO_CHAR(te.entry_date, 'YYYY-MM-DD') ILIKE '%' || $4 || '%'
+          OR te.hours::text ILIKE '%' || $4 || '%'
+        )
+    `;
+
+    const countResult = await this.database.query<{
+      total: string;
+      total_hours: string;
+    }>(
+      `
+        SELECT
+          COUNT(*)::text AS total,
+          COALESCE(SUM(te.hours), 0)::text AS total_hours
+        FROM timesheet_entries te
+        JOIN projects p ON p.id = te.project_id
+        JOIN tasks t ON t.id = te.task_id
+        ${filters}
+      `,
+      [userId, options.from ?? null, options.to ?? null, search],
+    );
+
+    const total = Number(countResult.rows[0]?.total ?? 0);
+    const totalHours = Number(countResult.rows[0]?.total_hours ?? 0);
+
+    const listParams: unknown[] = [
+      userId,
+      options.from ?? null,
+      options.to ?? null,
+      search,
+    ];
+    let limitSql = '';
+    if (pageSize) {
+      listParams.push(pageSize, offset);
+      limitSql = `LIMIT $5 OFFSET $6`;
+    }
+
     const result = await this.database.query<TimesheetEntryRow>(
       `
         SELECT
@@ -129,15 +195,20 @@ export class TimesheetsRepository {
         FROM timesheet_entries te
         JOIN projects p ON p.id = te.project_id
         JOIN tasks t ON t.id = te.task_id
-        WHERE te.user_id = $1
-          AND ($2::date IS NULL OR te.entry_date >= $2::date)
-          AND ($3::date IS NULL OR te.entry_date <= $3::date)
+        ${filters}
         ORDER BY te.entry_date DESC, te.created_at DESC
+        ${limitSql}
       `,
-      [userId, from ?? null, to ?? null],
+      listParams,
     );
 
-    return result.rows.map((row) => this.toEntry(row));
+    return {
+      items: result.rows.map((row) => this.toEntry(row)),
+      total,
+      totalHours,
+      page,
+      pageSize: pageSize ?? total,
+    };
   }
 
   async findEntryById(id: string): Promise<TimesheetEntry | null> {

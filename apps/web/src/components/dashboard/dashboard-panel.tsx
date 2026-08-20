@@ -43,6 +43,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function DashboardPanel() {
   const router = useRouter();
@@ -54,7 +55,19 @@ export function DashboardPanel() {
       : null,
   );
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   const todayIso = toIsoDate();
   const thisWeek = useMemo(() => getWeekRange(todayIso), [todayIso]);
@@ -62,13 +75,32 @@ export function DashboardPanel() {
   const thisMonth = useMemo(() => getMonthRange(todayIso), [todayIso]);
   const lastMonth = useMemo(() => getPreviousMonthRange(todayIso), [todayIso]);
 
-  const rangeFrom = lastMonth.from;
-  const rangeTo = thisWeek.to > thisMonth.to ? thisWeek.to : thisMonth.to;
+  const summaryFrom = lastMonth.from;
+  const summaryTo = thisWeek.to > thisMonth.to ? thisWeek.to : thisMonth.to;
 
-  const entriesQuery = useQuery({
-    queryKey: timesheetEntriesQueryKey(rangeFrom, rangeTo),
-    queryFn: () => listTimesheetEntries({ from: rangeFrom, to: rangeTo }),
+  const summaryQuery = useQuery({
+    queryKey: timesheetEntriesQueryKey({
+      from: summaryFrom,
+      to: summaryTo,
+    }),
+    queryFn: () =>
+      listTimesheetEntries({ from: summaryFrom, to: summaryTo }),
     enabled: Boolean(user),
+  });
+
+  const tableQueryInput = {
+    from: thisMonth.from,
+    to: thisMonth.to,
+    search: debouncedSearch || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+
+  const tableQuery = useQuery({
+    queryKey: timesheetEntriesQueryKey(tableQueryInput),
+    queryFn: () => listTimesheetEntries(tableQueryInput),
+    enabled: Boolean(user),
+    placeholderData: (previous) => previous,
   });
 
   const isAdmin = user?.role === "ADMIN";
@@ -85,10 +117,10 @@ export function DashboardPanel() {
     enabled: Boolean(user) && isAdmin,
   });
 
-  const entries = entriesQuery.data ?? [];
+  const summaryEntries = summaryQuery.data?.items ?? [];
 
   const sumInRange = (from: string, to: string) =>
-    entries.reduce((total, entry) => {
+    summaryEntries.reduce((total, entry) => {
       if (entry.entryDate >= from && entry.entryDate <= to) {
         return total + entry.hours;
       }
@@ -101,55 +133,18 @@ export function DashboardPanel() {
   const hoursLastMonth = sumInRange(lastMonth.from, lastMonth.to);
   const hoursToday = sumInRange(todayIso, todayIso);
 
-  const monthEntries = useMemo(
-    () =>
-      entries
-        .filter(
-          (entry) =>
-            entry.entryDate >= thisMonth.from &&
-            entry.entryDate <= thisMonth.to,
-        )
-        .sort((a, b) => {
-          if (a.entryDate === b.entryDate) {
-            return b.hours - a.hours;
-          }
-          return a.entryDate < b.entryDate ? 1 : -1;
-        }),
-    [entries, thisMonth.from, thisMonth.to],
-  );
-
-  const filteredEntries = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return monthEntries;
-    }
-
-    return monthEntries.filter((entry) => {
-      const haystack = [
-        entry.projectName,
-        entry.taskName,
-        entry.description,
-        formatShortDate(entry.entryDate),
-        formatClock(entry.hours),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [monthEntries, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
+  const pageEntries = tableQuery.data?.items ?? [];
+  const totalRows = tableQuery.data?.total ?? 0;
+  const filteredHours = tableQuery.data?.totalHours ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageEntries = filteredEntries.slice(pageStart, pageStart + PAGE_SIZE);
-  const filteredHours = filteredEntries.reduce(
-    (total, entry) => total + entry.hours,
-    0,
-  );
+  const pageStart = totalRows === 0 ? 0 : (currentPage - 1) * PAGE_SIZE;
 
   useEffect(() => {
-    setPage(1);
-  }, [search]);
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const activeProjects =
     projectsQuery.data?.filter((project) => project.isActive).length ?? 0;
@@ -194,28 +189,28 @@ export function DashboardPanel() {
           <MetricCard
             label="This week"
             value={formatClock(hoursThisWeek)}
-            loading={entriesQuery.isLoading}
+            loading={summaryQuery.isLoading}
             icon={<Clock3 className="size-5" />}
             tone="green"
           />
           <MetricCard
             label="Last week"
             value={formatClock(hoursLastWeek)}
-            loading={entriesQuery.isLoading}
+            loading={summaryQuery.isLoading}
             icon={<History className="size-5" />}
             tone="orange"
           />
           <MetricCard
             label="This month"
             value={formatClock(hoursThisMonth)}
-            loading={entriesQuery.isLoading}
+            loading={summaryQuery.isLoading}
             icon={<CalendarDays className="size-5" />}
             tone="blue"
           />
           <MetricCard
             label="Last month"
             value={formatClock(hoursLastMonth)}
-            loading={entriesQuery.isLoading}
+            loading={summaryQuery.isLoading}
             icon={<CalendarRange className="size-5" />}
             tone="slate"
           />
@@ -227,32 +222,30 @@ export function DashboardPanel() {
           <h2 className="text-sm font-medium text-muted-foreground">
             {formatMonthYear(todayIso)} entries
           </h2>
-          {monthEntries.length > 0 ? (
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search project, task, notes…"
-                aria-label="Search month entries"
-                className="h-9 pl-8"
-              />
-            </div>
-          ) : null}
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search project, task, notes…"
+              aria-label="Search month entries"
+              className="h-9 pl-8"
+            />
+          </div>
         </div>
 
-        {entriesQuery.isLoading ? (
+        {tableQuery.isLoading && !tableQuery.data ? (
           <p className="text-sm text-muted-foreground">Loading entries…</p>
-        ) : monthEntries.length === 0 ? (
+        ) : totalRows === 0 && !debouncedSearch ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
             <p className="text-sm text-muted-foreground">
               No entries this month yet
             </p>
           </div>
-        ) : filteredEntries.length === 0 ? (
+        ) : totalRows === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No entries match “{search.trim()}”
+              No entries match “{debouncedSearch}”
             </p>
           </div>
         ) : (
@@ -279,13 +272,13 @@ export function DashboardPanel() {
                       colSpan={4}
                       className="px-4 py-2.5 text-sm font-medium text-foreground"
                     >
-                      {search.trim()
-                        ? `Filtered total (${filteredEntries.length})`
+                      {debouncedSearch
+                        ? `Filtered total (${totalRows})`
                         : "Month total"}
                     </td>
                     <td className="px-4 py-2.5 text-right text-sm font-semibold text-foreground">
                       {formatClock(
-                        search.trim() ? filteredHours : hoursThisMonth,
+                        debouncedSearch ? filteredHours : hoursThisMonth,
                       )}
                     </td>
                   </tr>
@@ -296,13 +289,13 @@ export function DashboardPanel() {
             <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 Showing {pageStart + 1}–
-                {Math.min(pageStart + PAGE_SIZE, filteredEntries.length)} of{" "}
-                {filteredEntries.length}
+                {Math.min(pageStart + PAGE_SIZE, totalRows)} of {totalRows}
+                {tableQuery.isFetching ? " · Updating…" : ""}
               </p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={currentPage <= 1}
+                  disabled={currentPage <= 1 || tableQuery.isFetching}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
                 >
@@ -314,7 +307,7 @@ export function DashboardPanel() {
                 </span>
                 <button
                   type="button"
-                  disabled={currentPage >= totalPages}
+                  disabled={currentPage >= totalPages || tableQuery.isFetching}
                   onClick={() =>
                     setPage((current) => Math.min(totalPages, current + 1))
                   }

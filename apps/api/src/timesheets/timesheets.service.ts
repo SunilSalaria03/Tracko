@@ -9,7 +9,7 @@ import { CreateTimesheetEntryDto } from './dto/create-timesheet-entry.dto';
 import { ListTimesheetEntriesDto } from './dto/list-timesheet-entries.dto';
 import { UpdateTimesheetEntryDto } from './dto/update-timesheet-entry.dto';
 import { TimesheetsRepository } from './timesheets.repository';
-import type { TimesheetEntry } from './timesheets.types';
+import type { TimesheetEntriesPage, TimesheetEntry } from './timesheets.types';
 
 const MAX_DAILY_HOURS = 24;
 
@@ -58,8 +58,17 @@ export class TimesheetsService {
     return { projects: Array.from(projects.values()) };
   }
 
-  listEntries(user: PublicUser, query: ListTimesheetEntriesDto): Promise<TimesheetEntry[]> {
-    return this.timesheetsRepository.listEntries(user.id, query.from, query.to);
+  listEntries(
+    user: PublicUser,
+    query: ListTimesheetEntriesDto,
+  ): Promise<TimesheetEntriesPage> {
+    return this.timesheetsRepository.listEntries(user.id, {
+      from: query.from,
+      to: query.to,
+      search: query.search,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
   }
 
   async createEntry(
