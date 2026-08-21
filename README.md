@@ -5,8 +5,12 @@ Time tracking for teams.
 ```text
 tracko/
 ├── apps/
-│   ├── web/     Next.js  (http://localhost:3000)
-│   └── api/     NestJS   (http://localhost:3001)
+│   ├── web/                      Next.js  (:3000)
+│   ├── api/                      API gateway (:3001)
+│   └── services/
+│       ├── auth-service/         (:3010)
+│       ├── timesheet-service/    (:3020)
+│       └── leave-service/        (:3030)
 └── README.md
 ```
 
@@ -22,12 +26,15 @@ tracko/
 
 ```bash
 copy apps\api\.env.example apps\api\.env
+copy apps\services\auth-service\.env.example apps\services\auth-service\.env
+copy apps\services\timesheet-service\.env.example apps\services\timesheet-service\.env
+copy apps\services\leave-service\.env.example apps\services\leave-service\.env
 copy apps\web\.env.example apps\web\.env.local
 ```
 
 On macOS/Linux use `cp`.
 
-2. Create a local PostgreSQL database and user, then match them in `apps/api/.env`:
+2. Create a local PostgreSQL database and user, then match them in **each service** `.env` (auth, timesheet, leave) — same DB and `JWT_SECRET`:
 
 ```text
 DATABASE_HOST=localhost
@@ -35,7 +42,10 @@ DATABASE_PORT=5432
 DATABASE_NAME=tracko
 DATABASE_USER=tracko_user
 DATABASE_PASSWORD=local_password
+JWT_SECRET=change-me-in-development
 ```
+
+Gateway `apps/api/.env` does not need the database; it needs service URLs from `.env.example`.
 
 3. Install dependencies (first time only):
 
@@ -47,14 +57,24 @@ cd ../web
 npm install
 ```
 
-4. Start the API:
+Services reuse `apps/api/node_modules` via a junction (created when scaffolding).
 
-```bash
-cd apps/api
-npm run start:dev
+4. Start backend microservices (4 terminals), or:
+
+```powershell
+.\scripts\start-microservices.ps1
 ```
 
-The API applies SQL migrations on startup.
+Manual:
+
+```bash
+cd apps/services/auth-service && npm run start:dev
+cd apps/services/timesheet-service && npm run start:dev
+cd apps/services/leave-service && npm run start:dev
+cd apps/api && npm run start:dev
+```
+
+Migrations run when domain services start.
 
 5. Start the web app in another terminal:
 
@@ -144,7 +164,7 @@ This is **disabled in production**. If you set a real Client ID (see below), the
 
 ```text
 apps/web/.env.local     NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-apps/api/.env           GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+apps/services/auth-service/.env   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 5. Restart the frontend and backend.
@@ -185,6 +205,23 @@ Every signed-in user can log time on `/timesheet`.
 - Day view: long notes scroll inside the entry row
 - Calendar view: a day cell shows entry chips; after about 8 lines it scrolls inside that cell
 
+## Leave
+
+Employees apply leave on `/leave`. Types:
+
+| Type | Balance | Rules |
+| --- | --- | --- |
+| Casual | Earn **1.0** day each month | Must apply at least **10 days** before start |
+| Sick | Earn **0.5** day each month | Can apply from today |
+| Unpaid | Unlimited | No balance check |
+
+- You can only apply casual/sick if available balance covers the days (pending requests count against availability)
+- Duration options: **Full day**, **First half** (0.5), **Second half** (0.5), or **Custom** start/end sessions (e.g. Full + next First half = **1.5** days)
+- Every request needs **admin approval**
+- Balance is reduced only when an admin **approves** (casual/sick)
+
+Admins review pending leave on the same Leave page.
+
 ## Dashboard
 
 `/dashboard` is your home after sign-in. It shows:
@@ -196,16 +233,48 @@ Every signed-in user can log time on `/timesheet`.
 - Search matches project, task, notes, date, or hours
 - Admins also see active project/task counts (week approvals are not built yet)
 
+## Backend microservices
+
+```text
+web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030
+```
+
+| App | Role | Port |
+| --- | --- | --- |
+| `apps/api` | API gateway (proxies + `/api/health`) | 3001 |
+| `apps/services/auth-service` | Auth / users / JWT | 3010 |
+| `apps/services/timesheet-service` | Projects, tasks, timesheets | 3020 |
+| `apps/services/leave-service` | Leave balances & requests | 3030 |
+
+Setup:
+
+1. Copy `.env.example` → `.env` in **each** service and set the same `DATABASE_*` + `JWT_SECRET`
+2. In `apps/api/.env`, set service URLs (see `apps/api/.env.example`)
+3. Start all four processes (or run `.\scripts\start-microservices.ps1`)
+
+Details: [docs/MICROSERVICES.md](docs/MICROSERVICES.md)
+
+## Backend domains (microservices)
+
+Code lives in separate Nest apps under `apps/services/*`. The gateway only proxies:
+
+| Domain | Service |
+| --- | --- |
+| Auth | `auth-service` |
+| Timesheet (+ projects/tasks) | `timesheet-service` |
+| Leave | `leave-service` |
+
 ## Pages after you sign in
 
 - `/dashboard` — hour summary and this month’s entries
 - `/timesheet` — add and manage your time
+- `/leave` — leave balance, apply, and (admin) approve
 - `/settings` — sign-in methods, and set a password if you only used Google
 - `/projects` — admin only: projects and tasks
 
 Sidebar links:
 
-- Everyone: Dashboard, Timesheet, Settings
+- Everyone: Dashboard, Timesheet, Leave, Settings
 - Admin also: Projects
 
 ### Mobile and tablet sidebar
@@ -245,17 +314,22 @@ On phone and tablet the sidebar starts **closed**.
 | POST | `/api/timesheet/entries` | Cookie | Create an entry |
 | PATCH | `/api/timesheet/entries/:id` | Cookie | Update an entry (hours stay fixed) |
 | DELETE | `/api/timesheet/entries/:id` | Cookie | Delete an entry |
+| GET | `/api/leave/balance` | Cookie | Leave balance (after monthly accrual) |
+| GET | `/api/leave/requests/me` | Cookie | My leave requests |
+| GET | `/api/leave/requests` | Admin | All leave requests (`?status=` optional) |
+| POST | `/api/leave/requests` | Cookie | Apply for leave |
+| PATCH | `/api/leave/requests/:id/review` | Admin | Approve or reject leave |
+| DELETE | `/api/leave/requests/:id` | Cookie | Delete own upcoming pending/approved leave |
 
-Local database credentials live in `apps/api/.env` and are for development only. Do not use them in production.
+Local database credentials live in each service `.env` and are for development only. Do not use them in production.
 
 ## Tests and builds
 
 ```bash
-cd apps/api
-npm test
-npm run build
+cd apps/services/auth-service && npm test
+cd apps/services/timesheet-service && npm test
+cd apps/services/leave-service && npm test
 
-cd ../web
-npm run lint
-npm run build
+cd apps/api && npm run build
+cd apps/web && npm run build
 ```

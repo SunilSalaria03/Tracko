@@ -1,0 +1,32 @@
+---
+description: Prevent horizontal layout blowouts from long unbroken text in forms and tables
+globs: apps/web/**/*.{tsx,ts,css}
+alwaysApply: false
+---
+
+# No horizontal overflow from long text
+
+Long unbroken strings (reasons, notes, emails, URLs) must never widen dialogs, cards, or tables.
+
+## Text inputs
+
+- Prefer the shared `Textarea` / `Input` components.
+- Do **not** use `field-sizing-content` on textareas (it grows width with content).
+- Textareas/inputs must stay within the parent: `w-full min-w-0 max-w-full`.
+- Allow wrapping: `break-words` and `[overflow-wrap:anywhere]`.
+- Vertical growth only: `resize-y` on textareas when resize is needed.
+
+## Displaying user text
+
+- Table cells and review notes that show free text need:
+  - `min-w-0`
+  - `break-words [overflow-wrap:anywhere]`
+  - optional `line-clamp-*` / `truncate` when a short preview is enough
+- Dialog bodies and flex/grid children that hold text need `min-w-0` so they can shrink.
+
+## Quick check
+
+Paste a long string with no spaces into reason/notes fields and confirm:
+1. The dialog width does not expand
+2. Text wraps inside the box
+3. List/table cells wrap or clamp instead of stretching the layout

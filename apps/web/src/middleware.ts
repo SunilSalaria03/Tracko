@@ -15,7 +15,8 @@ export function middleware(request: NextRequest) {
     (pathname.startsWith("/dashboard") ||
       pathname.startsWith("/settings") ||
       pathname.startsWith("/projects") ||
-      pathname.startsWith("/timesheet")) &&
+      pathname.startsWith("/timesheet") ||
+      pathname.startsWith("/leave")) &&
     !token
   ) {
     const url = request.nextUrl.clone();
@@ -35,5 +36,6 @@ export const config = {
     "/settings/:path*",
     "/projects/:path*",
     "/timesheet/:path*",
+    "/leave/:path*",
   ],
 };

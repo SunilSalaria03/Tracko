@@ -121,6 +121,7 @@ describe('TimesheetsService', () => {
       projectId: 'p1',
       taskId: 't1',
       entryDate: todayIso(),
+      
       hours: 8,
       description: 'Existing notes',
     });
