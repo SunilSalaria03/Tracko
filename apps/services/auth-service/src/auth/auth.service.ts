@@ -13,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import { PublicUser, toPublicUser, type GoogleSignInResult } from '../users/user.types';
 import {
   AUTH_COOKIE_NAME,
+  AUTH_REFRESH_COOKIE_NAME,
   EMAIL_ALREADY_REGISTERED_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
   INVALID_RESET_CODE_MESSAGE,
@@ -68,7 +69,9 @@ export class AuthService {
     }
   }
 
-  async signIn(dto: SignInDto): Promise<{ user: PublicUser; token: string }> {
+  async signIn(
+    dto: SignInDto,
+  ): Promise<{ user: PublicUser; token: string; refreshToken: string }> {
     const user = await this.authRepository.findByEmail(dto.email);
 
     if (!user?.passwordHash) {
@@ -85,8 +88,9 @@ export class AuthService {
     }
 
     const token = await this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user.id);
 
-    return { user: toPublicUser(user), token };
+    return { user: toPublicUser(user), token, refreshToken };
   }
 
   async signInWithGoogle(
@@ -206,6 +210,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     await this.authRepository.updatePassword(user.id, passwordHash);
+    await this.authRepository.deleteRefreshTokensForUser(user.id);
     await this.authRepository.consumeChallenge(challenge.id);
 
     return { ok: true };
@@ -215,16 +220,101 @@ export class AuthService {
     return AUTH_COOKIE_NAME;
   }
 
+  getRefreshCookieName(): string {
+    return AUTH_REFRESH_COOKIE_NAME;
+  }
+
   getCookieOptions(): CookieOptions {
+    return this.buildCookieOptions('JWT_EXPIRES_IN', 15 * 60 * 1000);
+  }
+
+  getRefreshCookieOptions(): CookieOptions {
+    return this.buildCookieOptions('JWT_REFRESH_EXPIRES_IN', 7 * 24 * 60 * 60 * 1000);
+  }
+
+  async refreshSession(refreshToken: string | undefined): Promise<{
+    token: string;
+    refreshToken: string;
+  }> {
+    if (!refreshToken) {
+      throw new UnauthorizedException();
+    }
+
+    const tokenHash = this.hashRefreshToken(refreshToken);
+    const stored = await this.authRepository.findRefreshToken(tokenHash);
+
+    if (!stored || stored.expiresAt.getTime() <= Date.now()) {
+      if (stored) {
+        await this.authRepository.deleteRefreshToken(stored.id);
+      }
+      throw new UnauthorizedException();
+    }
+
+    const user = await this.authRepository.findById(stored.userId);
+    if (!user) {
+      await this.authRepository.deleteRefreshToken(stored.id);
+      throw new UnauthorizedException();
+    }
+
+    await this.authRepository.deleteRefreshToken(stored.id);
+    const token = await this.createAccessToken(user);
+    const nextRefresh = await this.createRefreshToken(user.id);
+
+    return { token, refreshToken: nextRefresh };
+  }
+
+  async revokeRefreshToken(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) {
+      return;
+    }
+
+    const stored = await this.authRepository.findRefreshToken(
+      this.hashRefreshToken(refreshToken),
+    );
+    if (stored) {
+      await this.authRepository.deleteRefreshToken(stored.id);
+    }
+  }
+
+  private buildCookieOptions(
+    envKey: string,
+    fallbackMs: number,
+  ): CookieOptions {
+    const raw = this.config.get<string>(envKey);
     return {
       httpOnly: true,
       secure: this.config.get<string>('NODE_ENV') === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: parseDurationToMs(
-        this.config.getOrThrow<string>('JWT_EXPIRES_IN'),
-      ),
+      maxAge: raw ? parseDurationToMs(raw) : fallbackMs,
     };
+  }
+
+  private async createRefreshToken(userId: string): Promise<string> {
+    const token = randomBytes(32).toString('hex');
+    const expiresMs = this.getRefreshCookieOptions().maxAge ?? 7 * 24 * 60 * 60 * 1000;
+    await this.authRepository.saveRefreshToken({
+      userId,
+      tokenHash: this.hashRefreshToken(token),
+      expiresAt: new Date(Date.now() + expiresMs),
+    });
+    return token;
+  }
+
+  private createAccessToken(user: PublicUser): Promise<string> {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+  }
+
+  private hashRefreshToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private hashResetToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private async completeGoogleSignIn(
@@ -264,19 +354,8 @@ export class AuthService {
     }
 
     const token = await this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user.id);
 
-    return { user: toPublicUser(user), token, googleLinked };
-  }
-
-  private createAccessToken(user: PublicUser): Promise<string> {
-    return this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
-  }
-
-  private hashResetToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return { user: toPublicUser(user), token, refreshToken, googleLinked };
   }
 }

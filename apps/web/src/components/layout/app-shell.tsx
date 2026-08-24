@@ -3,6 +3,7 @@
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -45,6 +46,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const isChat = pathname === "/chat";
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
@@ -52,7 +55,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
       />
-      <div className="flex min-h-[calc(100vh-3.5rem)]">
+      <div
+        className={cn(
+          "flex",
+          isChat
+            ? "h-[calc(100vh-3.5rem)] overflow-hidden"
+            : "min-h-[calc(100vh-3.5rem)]",
+        )}
+      >
         {sidebarOpen ? (
           <button
             type="button"
@@ -62,7 +72,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
         ) : null}
         <AppSidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
-        <main className="min-w-0 flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main
+          className={cn(
+            "min-w-0 flex-1 p-4 md:p-6 lg:p-8",
+            isChat && "flex min-h-0 overflow-hidden",
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

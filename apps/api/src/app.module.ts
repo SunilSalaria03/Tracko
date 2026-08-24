@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
  * - /api/auth → auth-service :3010
  * - /api/projects|/api/tasks|/api/timesheet → timesheet-service :3020
  * - /api/leave → leave-service :3030
+ * - /api/chat + /socket.io → chat-service :3040
  */
 @Module({
   imports: [

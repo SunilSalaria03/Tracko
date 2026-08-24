@@ -70,6 +70,60 @@ export class AuthRepository {
     return row ? this.toUserRecord(row) : null;
   }
 
+  async saveRefreshToken(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.database.query(
+      `
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3)
+      `,
+      [input.userId, input.tokenHash, input.expiresAt],
+    );
+  }
+
+  async findRefreshToken(tokenHash: string): Promise<{
+    id: string;
+    userId: string;
+    expiresAt: Date;
+  } | null> {
+    const result = await this.database.query<{
+      id: string;
+      user_id: string;
+      expires_at: Date;
+    }>(
+      `
+        SELECT id, user_id, expires_at
+        FROM refresh_tokens
+        WHERE token_hash = $1
+      `,
+      [tokenHash],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      userId: row.user_id,
+      expiresAt: row.expires_at,
+    };
+  }
+
+  async deleteRefreshToken(id: string): Promise<void> {
+    await this.database.query(`DELETE FROM refresh_tokens WHERE id = $1`, [id]);
+  }
+
+  async deleteRefreshTokensForUser(userId: string): Promise<void> {
+    await this.database.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [
+      userId,
+    ]);
+  }
+
   async findByEmail(email: string): Promise<UserRecord | null> {
     const result = await this.database.query<UserRow>(
       `

@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { CalendarOff, Clock, FolderKanban, LayoutDashboard, Settings } from "lucide-react";
+import { CalendarOff, Clock, FolderKanban, LayoutDashboard, MessageCircle, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,6 +10,7 @@ const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/timesheet", label: "Timesheet", icon: Clock },
   { href: "/leave", label: "Leave", icon: CalendarOff },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
   { href: "/projects", label: "Projects", icon: FolderKanban, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

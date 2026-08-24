@@ -1,4 +1,5 @@
 export const AUTH_COOKIE_NAME = "tracko_token";
+export const AUTH_REFRESH_COOKIE_NAME = "tracko_refresh";
 export const currentUserQueryKey = ["current-user"] as const;
 
 export type PublicUser = {

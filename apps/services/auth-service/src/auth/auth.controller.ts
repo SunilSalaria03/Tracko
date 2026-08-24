@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import type { PublicUser } from '../users/user.types';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -26,14 +26,8 @@ export class AuthController {
     @Body() dto: SignInDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<PublicUser> {
-    const { user, token } = await this.authService.signIn(dto);
-
-    response.cookie(
-      this.authService.getCookieName(),
-      token,
-      this.authService.getCookieOptions(),
-    );
-
+    const { user, token, refreshToken } = await this.authService.signIn(dto);
+    this.setSessionCookies(response, token, refreshToken);
     return user;
   }
 
@@ -42,16 +36,9 @@ export class AuthController {
     @Body() dto: GoogleAuthDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<PublicUser & { googleLinked: boolean }> {
-    const { user, token, googleLinked } = await this.authService.signInWithGoogle(
-      dto.accessToken,
-    );
-
-    response.cookie(
-      this.authService.getCookieName(),
-      token,
-      this.authService.getCookieOptions(),
-    );
-
+    const { user, token, refreshToken, googleLinked } =
+      await this.authService.signInWithGoogle(dto.accessToken);
+    this.setSessionCookies(response, token, refreshToken);
     return { ...user, googleLinked };
   }
 
@@ -59,15 +46,9 @@ export class AuthController {
   async dummyGoogle(
     @Res({ passthrough: true }) response: Response,
   ): Promise<PublicUser & { googleLinked: boolean }> {
-    const { user, token, googleLinked } =
+    const { user, token, refreshToken, googleLinked } =
       await this.authService.signInWithDummyGoogle();
-
-    response.cookie(
-      this.authService.getCookieName(),
-      token,
-      this.authService.getCookieOptions(),
-    );
-
+    this.setSessionCookies(response, token, refreshToken);
     return { ...user, googleLinked };
   }
 
@@ -99,13 +80,38 @@ export class AuthController {
     return this.authService.setPassword(user.id, dto);
   }
 
+  @Post('refresh')
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ ok: true }> {
+    const { token, refreshToken } = await this.authService.refreshSession(
+      request.cookies?.[this.authService.getRefreshCookieName()] as
+        | string
+        | undefined,
+    );
+    this.setSessionCookies(response, token, refreshToken);
+    return { ok: true };
+  }
+
   @Post('logout')
-  logout(@Res({ passthrough: true }) response: Response): { ok: true } {
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ ok: true }> {
+    await this.authService.revokeRefreshToken(
+      request.cookies?.[this.authService.getRefreshCookieName()] as
+        | string
+        | undefined,
+    );
     response.clearCookie(this.authService.getCookieName(), {
       ...this.authService.getCookieOptions(),
       maxAge: 0,
     });
-
+    response.clearCookie(this.authService.getRefreshCookieName(), {
+      ...this.authService.getRefreshCookieOptions(),
+      maxAge: 0,
+    });
     return { ok: true };
   }
 
@@ -113,5 +119,22 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: PublicUser): PublicUser {
     return user;
+  }
+
+  private setSessionCookies(
+    response: Response,
+    accessToken: string,
+    refreshToken: string,
+  ): void {
+    response.cookie(
+      this.authService.getCookieName(),
+      accessToken,
+      this.authService.getCookieOptions(),
+    );
+    response.cookie(
+      this.authService.getRefreshCookieName(),
+      refreshToken,
+      this.authService.getRefreshCookieOptions(),
+    );
   }
 }

@@ -20,6 +20,7 @@ export type UserRecord = PublicUser & {
 export type GoogleSignInResult = {
   user: PublicUser;
   token: string;
+  refreshToken: string;
   googleLinked: boolean;
 };
 

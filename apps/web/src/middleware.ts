@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/types";
+import { AUTH_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME } from "@/lib/auth/types";
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const refreshToken = request.cookies.get(AUTH_REFRESH_COOKIE_NAME)?.value;
+  const hasSession = Boolean(token || refreshToken);
   const { pathname } = request.nextUrl;
 
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = token ? "/dashboard" : "/sign-in";
+    url.pathname = hasSession ? "/dashboard" : "/sign-in";
     return NextResponse.redirect(url);
   }
 
@@ -16,8 +18,9 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/settings") ||
       pathname.startsWith("/projects") ||
       pathname.startsWith("/timesheet") ||
-      pathname.startsWith("/leave")) &&
-    !token
+      pathname.startsWith("/leave") ||
+      pathname.startsWith("/chat")) &&
+    !hasSession
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
@@ -37,5 +40,6 @@ export const config = {
     "/projects/:path*",
     "/timesheet/:path*",
     "/leave/:path*",
+    "/chat/:path*",
   ],
 };

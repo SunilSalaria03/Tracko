@@ -12,6 +12,22 @@ import { AppModule } from './app.module';
  * Mounted proxies strip the mount path (e.g. /api/auth/signin → /signin).
  * Restore the prefix so Nest services still receive /api/...
  */
+function proxyErrorHandler(name: string, logger: Logger) {
+  return (err: Error, _req: unknown, res: unknown) => {
+    logger.error(err.message);
+    const response = res as Response;
+    if (response && typeof response.headersSent === 'boolean' && !response.headersSent) {
+      response.writeHead(502, { 'Content-Type': 'application/json' });
+      response.end(
+        JSON.stringify({
+          statusCode: 502,
+          message: `${name} service unavailable`,
+        }),
+      );
+    }
+  };
+}
+
 function buildProxy(
   name: string,
   target: string,
@@ -25,25 +41,28 @@ function buildProxy(
     xfwd: true,
     pathRewrite: (path) => `${pathPrefix}${path}`,
     on: {
-      error: (err, _req, res) => {
-        logger.error(err.message);
-        const response = res as Response;
-        if (!response.headersSent) {
-          response.writeHead(502, { 'Content-Type': 'application/json' });
-          response.end(
-            JSON.stringify({
-              statusCode: 502,
-              message: `${name} service unavailable`,
-            }),
-          );
+      proxyReq: (proxyReq, req) => {
+        const cookie = req.headers.cookie;
+        if (cookie) {
+          proxyReq.setHeader('cookie', cookie);
+        }
+        const authorization = req.headers.authorization;
+        if (authorization) {
+          proxyReq.setHeader('authorization', authorization);
         }
       },
+      error: proxyErrorHandler(name, logger),
     },
   });
 }
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
+    credentials: true,
+  });
+  app.use(cookieParser());
   const express = app.getHttpAdapter().getInstance();
 
   const authUrl =
@@ -52,8 +71,29 @@ async function bootstrap() {
     process.env.TIMESHEET_SERVICE_URL ?? 'http://127.0.0.1:3020';
   const leaveUrl =
     process.env.LEAVE_SERVICE_URL ?? 'http://127.0.0.1:3030';
+  const chatUrl = process.env.CHAT_SERVICE_URL ?? 'http://127.0.0.1:3040';
 
   // Register proxies before Nest route handling for reliable catch-all forwarding.
+  const socketLogger = new Logger('Gateway:chat-ws');
+  socketLogger.log(`Routing /socket.io → ${chatUrl}`);
+  const socketProxy = createProxyMiddleware({
+    target: chatUrl,
+    changeOrigin: true,
+    ws: true,
+    xfwd: true,
+    // Express strips the mount path; Socket.IO must still receive /socket.io/...
+    pathRewrite: (path) => `/socket.io${path}`,
+    on: {
+      proxyReq: (proxyReq, req) => {
+        const cookie = req.headers.cookie;
+        if (cookie) {
+          proxyReq.setHeader('cookie', cookie);
+        }
+      },
+      error: proxyErrorHandler('chat-ws', socketLogger),
+    },
+  });
+  express.use('/socket.io', socketProxy);
   express.use('/api/auth', buildProxy('auth', authUrl, '/api/auth'));
   express.use(
     '/api/timesheet',
@@ -65,16 +105,28 @@ async function bootstrap() {
   );
   express.use('/api/tasks', buildProxy('tasks', timesheetUrl, '/api/tasks'));
   express.use('/api/leave', buildProxy('leave', leaveUrl, '/api/leave'));
+  express.use('/api/chat', buildProxy('chat', chatUrl, '/api/chat'));
 
   app.setGlobalPrefix('api');
-  app.use(cookieParser());
-  app.enableCors({
-    origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
-    credentials: true,
-  });
-
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
+  const httpServer = app.getHttpServer() as {
+    on: (
+      event: string,
+      listener: (...args: unknown[]) => void,
+    ) => void;
+  };
+  httpServer.on('upgrade', (...args: unknown[]) => {
+    const req = args[0] as { url?: string };
+    if (req.url?.startsWith('/socket.io')) {
+      const upgrade = (
+        socketProxy as RequestHandler & {
+          upgrade?: (...upgradeArgs: unknown[]) => void;
+        }
+      ).upgrade;
+      upgrade?.(...args);
+    }
+  });
   new Logger('Gateway').log(`API gateway listening on ${port}`);
 }
 void bootstrap();

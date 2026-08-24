@@ -1,4 +1,5 @@
 export const AUTH_COOKIE_NAME = 'tracko_token';
+export const AUTH_REFRESH_COOKIE_NAME = 'tracko_refresh';
 
 export const EMAIL_ALREADY_REGISTERED_MESSAGE =
   'This email is already associated with an account. Sign in to continue.';

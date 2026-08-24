@@ -10,7 +10,8 @@ tracko/
 │   └── services/
 │       ├── auth-service/         (:3010)
 │       ├── timesheet-service/    (:3020)
-│       └── leave-service/        (:3030)
+│       ├── leave-service/        (:3030)
+│       └── chat-service/         (:3040)
 └── README.md
 ```
 
@@ -29,12 +30,13 @@ copy apps\api\.env.example apps\api\.env
 copy apps\services\auth-service\.env.example apps\services\auth-service\.env
 copy apps\services\timesheet-service\.env.example apps\services\timesheet-service\.env
 copy apps\services\leave-service\.env.example apps\services\leave-service\.env
+copy apps\services\chat-service\.env.example apps\services\chat-service\.env
 copy apps\web\.env.example apps\web\.env.local
 ```
 
 On macOS/Linux use `cp`.
 
-2. Create a local PostgreSQL database and user, then match them in **each service** `.env` (auth, timesheet, leave) — same DB and `JWT_SECRET`:
+2. Create a local PostgreSQL database and user, then match them in **each service** `.env` (auth, timesheet, leave, chat) — same DB and `JWT_SECRET`:
 
 ```text
 DATABASE_HOST=localhost
@@ -59,7 +61,7 @@ npm install
 
 Services reuse `apps/api/node_modules` via a junction (created when scaffolding).
 
-4. Start backend microservices (4 terminals), or:
+4. Start backend microservices (5 terminals), or:
 
 ```powershell
 .\scripts\start-microservices.ps1
@@ -71,6 +73,7 @@ Manual:
 cd apps/services/auth-service && npm run start:dev
 cd apps/services/timesheet-service && npm run start:dev
 cd apps/services/leave-service && npm run start:dev
+cd apps/services/chat-service && npm run start:dev
 cd apps/api && npm run start:dev
 ```
 
@@ -236,7 +239,7 @@ Admins review pending leave on the same Leave page.
 ## Backend microservices
 
 ```text
-web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030
+web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030 | chat :3040
 ```
 
 | App | Role | Port |
@@ -245,12 +248,13 @@ web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030
 | `apps/services/auth-service` | Auth / users / JWT | 3010 |
 | `apps/services/timesheet-service` | Projects, tasks, timesheets | 3020 |
 | `apps/services/leave-service` | Leave balances & requests | 3030 |
+| `apps/services/chat-service` | 1:1 employee chat (HTTP + live socket) | 3040 |
 
 Setup:
 
 1. Copy `.env.example` → `.env` in **each** service and set the same `DATABASE_*` + `JWT_SECRET`
 2. In `apps/api/.env`, set service URLs (see `apps/api/.env.example`)
-3. Start all four processes (or run `.\scripts\start-microservices.ps1`)
+3. Start all five processes (or run `.\scripts\start-microservices.ps1`)
 
 Details: [docs/MICROSERVICES.md](docs/MICROSERVICES.md)
 
@@ -263,18 +267,20 @@ Code lives in separate Nest apps under `apps/services/*`. The gateway only proxi
 | Auth | `auth-service` |
 | Timesheet (+ projects/tasks) | `timesheet-service` |
 | Leave | `leave-service` |
+| Chat | `chat-service` |
 
 ## Pages after you sign in
 
 - `/dashboard` — hour summary and this month’s entries
 - `/timesheet` — add and manage your time
 - `/leave` — leave balance, apply, and (admin) approve
+- `/chat` — 1:1 live chat with other employees and admins
 - `/settings` — sign-in methods, and set a password if you only used Google
 - `/projects` — admin only: projects and tasks
 
 Sidebar links:
 
-- Everyone: Dashboard, Timesheet, Leave, Settings
+- Everyone: Dashboard, Timesheet, Leave, Chat, Settings
 - Admin also: Projects
 
 ### Mobile and tablet sidebar
