@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { CalendarOff, Clock, FolderKanban, LayoutDashboard, MessageCircle, Settings } from "lucide-react";
+import { CalendarOff, Clock, CreditCard, FolderKanban, LayoutDashboard, MessageCircle, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -11,6 +11,7 @@ const items = [
   { href: "/timesheet", label: "Timesheet", icon: Clock },
   { href: "/leave", label: "Leave", icon: CalendarOff },
   { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/projects", label: "Projects", icon: FolderKanban, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

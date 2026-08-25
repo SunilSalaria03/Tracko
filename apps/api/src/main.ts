@@ -57,7 +57,10 @@ function buildProxy(
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Do not parse JSON here — proxies must forward the raw stream.
+  // Stripe webhooks fail signature checks (and can reset the socket) if the
+  // gateway consumes or re-serializes the body first.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.enableCors({
     origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
     credentials: true,
@@ -72,6 +75,8 @@ async function bootstrap() {
   const leaveUrl =
     process.env.LEAVE_SERVICE_URL ?? 'http://127.0.0.1:3030';
   const chatUrl = process.env.CHAT_SERVICE_URL ?? 'http://127.0.0.1:3040';
+  const paymentUrl =
+    process.env.PAYMENT_SERVICE_URL ?? 'http://127.0.0.1:3050';
 
   // Register proxies before Nest route handling for reliable catch-all forwarding.
   const socketLogger = new Logger('Gateway:chat-ws');
@@ -106,6 +111,14 @@ async function bootstrap() {
   express.use('/api/tasks', buildProxy('tasks', timesheetUrl, '/api/tasks'));
   express.use('/api/leave', buildProxy('leave', leaveUrl, '/api/leave'));
   express.use('/api/chat', buildProxy('chat', chatUrl, '/api/chat'));
+  express.use(
+    '/api/webhooks',
+    buildProxy('stripe-webhooks', paymentUrl, '/api/webhooks'),
+  );
+  express.use(
+    '/api/payments',
+    buildProxy('payments', paymentUrl, '/api/payments'),
+  );
 
   app.setGlobalPrefix('api');
   const port = process.env.PORT ?? 3001;

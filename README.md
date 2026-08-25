@@ -11,7 +11,8 @@ tracko/
 │       ├── auth-service/         (:3010)
 │       ├── timesheet-service/    (:3020)
 │       ├── leave-service/        (:3030)
-│       └── chat-service/         (:3040)
+│       ├── chat-service/         (:3040)
+│       └── payment-service/      (:3050)
 └── README.md
 ```
 
@@ -31,12 +32,13 @@ copy apps\services\auth-service\.env.example apps\services\auth-service\.env
 copy apps\services\timesheet-service\.env.example apps\services\timesheet-service\.env
 copy apps\services\leave-service\.env.example apps\services\leave-service\.env
 copy apps\services\chat-service\.env.example apps\services\chat-service\.env
+copy apps\services\payment-service\.env.example apps\services\payment-service\.env
 copy apps\web\.env.example apps\web\.env.local
 ```
 
 On macOS/Linux use `cp`.
 
-2. Create a local PostgreSQL database and user, then match them in **each service** `.env` (auth, timesheet, leave, chat) — same DB and `JWT_SECRET`:
+2. Create a local PostgreSQL database and user, then match them in **each service** `.env` (auth, timesheet, leave, chat, payment) — same DB and `JWT_SECRET`:
 
 ```text
 DATABASE_HOST=localhost
@@ -74,6 +76,7 @@ cd apps/services/auth-service && npm run start:dev
 cd apps/services/timesheet-service && npm run start:dev
 cd apps/services/leave-service && npm run start:dev
 cd apps/services/chat-service && npm run start:dev
+cd apps/services/payment-service && npm run start:dev
 cd apps/api && npm run start:dev
 ```
 
@@ -239,7 +242,7 @@ Admins review pending leave on the same Leave page.
 ## Backend microservices
 
 ```text
-web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030 | chat :3040
+web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030 | chat :3040 | payments :3050
 ```
 
 | App | Role | Port |
@@ -249,12 +252,13 @@ web :3000 → gateway :3001 → auth :3010 | timesheet :3020 | leave :3030 | cha
 | `apps/services/timesheet-service` | Projects, tasks, timesheets | 3020 |
 | `apps/services/leave-service` | Leave balances & requests | 3030 |
 | `apps/services/chat-service` | 1:1 employee chat (HTTP + live socket) | 3040 |
+| `apps/services/payment-service` | Stripe Checkout + webhooks | 3050 |
 
 Setup:
 
 1. Copy `.env.example` → `.env` in **each** service and set the same `DATABASE_*` + `JWT_SECRET`
 2. In `apps/api/.env`, set service URLs (see `apps/api/.env.example`)
-3. Start all five processes (or run `.\scripts\start-microservices.ps1`)
+3. Start all backend processes (or run `.\scripts\start-microservices.ps1`)
 
 Details: [docs/MICROSERVICES.md](docs/MICROSERVICES.md)
 
@@ -268,6 +272,7 @@ Code lives in separate Nest apps under `apps/services/*`. The gateway only proxi
 | Timesheet (+ projects/tasks) | `timesheet-service` |
 | Leave | `leave-service` |
 | Chat | `chat-service` |
+| Payments | `payment-service` |
 
 ## Pages after you sign in
 
@@ -275,6 +280,7 @@ Code lives in separate Nest apps under `apps/services/*`. The gateway only proxi
 - `/timesheet` — add and manage your time
 - `/leave` — leave balance, apply, and (admin) approve
 - `/chat` — 1:1 live chat with other employees and admins
+- `/billing` — Stripe test checkout (webhook confirms paid)
 - `/settings` — sign-in methods, and set a password if you only used Google
 - `/projects` — admin only: projects and tasks
 

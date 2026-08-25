@@ -9,6 +9,7 @@ import { AppController } from './app.controller';
  * - /api/projects|/api/tasks|/api/timesheet → timesheet-service :3020
  * - /api/leave → leave-service :3030
  * - /api/chat + /socket.io → chat-service :3040
+ * - /api/payments + /api/webhooks/stripe → payment-service :3050
  */
 @Module({
   imports: [

@@ -21,9 +21,10 @@ $auth = Join-Path $root "apps\services\auth-service"
 $ts = Join-Path $root "apps\services\timesheet-service"
 $leave = Join-Path $root "apps\services\leave-service"
 $chat = Join-Path $root "apps\services\chat-service"
+$payment = Join-Path $root "apps\services\payment-service"
 $gateway = Join-Path $root "apps\api"
 
-foreach ($dir in @($auth, $ts, $leave, $chat, $gateway)) {
+foreach ($dir in @($auth, $ts, $leave, $chat, $payment, $gateway)) {
   if (-not (Test-Path (Join-Path $dir ".env"))) {
     Write-Warning "Missing .env in $dir — copy from .env.example first."
   }
@@ -36,7 +37,9 @@ Start-Sleep -Seconds 2
 Start-ServiceWindow -Title "leave-service :3030" -WorkDir $leave -Command "npm run start:dev"
 Start-Sleep -Seconds 2
 Start-ServiceWindow -Title "chat-service :3040" -WorkDir $chat -Command "npm run start:dev"
+Start-Sleep -Seconds 2
+Start-ServiceWindow -Title "payment-service :3050" -WorkDir $payment -Command "npm run start:dev"
 Start-Sleep -Seconds 3
 Start-ServiceWindow -Title "api-gateway :3001" -WorkDir $gateway -Command "npm run start:dev"
 
-Write-Host "Started 5 terminals. Web should use NEXT_PUBLIC_API_URL=http://localhost:3001"
+Write-Host "Started 6 terminals. Web should use NEXT_PUBLIC_API_URL=http://localhost:3001"

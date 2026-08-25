@@ -11,8 +11,8 @@
                  └──┬──────┬─────┬───┬──┘
                     │      │     │   │
            ┌────────▼─┐ ┌──▼──┐ ┌▼───▼┐ ┌▼────────┐
-           │ Auth     │ │ TS  │ │Leave│ │ Chat    │
-           │ :3010    │ │:3020│ │:3030│ │ :3040   │
+           │ Auth     │ │ TS  │ │Leave│ │ Chat    │ │ Pay     │
+           │ :3010    │ │:3020│ │:3030│ │ :3040   │ │ :3050   │
            └────┬─────┘ └──┬──┘ └──┬──┘ └────┬────┘
                 └──────────┴───────┴─────────┘
                          PostgreSQL (shared)
@@ -27,6 +27,7 @@
 | **Timesheet** | `/api/projects`, `/api/tasks`, `/api/timesheet/*` | `3020` | `apps/services/timesheet-service` |
 | **Leave** | `/api/leave/*` | `3030` | `apps/services/leave-service` |
 | **Chat** | `/api/chat/*`, `/socket.io` | `3040` | `apps/services/chat-service` |
+| **Payments** | `/api/payments/*`, `/api/webhooks/stripe` | `3050` | `apps/services/payment-service` |
 
 Web continues to call only the gateway (`NEXT_PUBLIC_API_URL=http://localhost:3001`).
 
@@ -43,6 +44,7 @@ Gateway needs:
 - `TIMESHEET_SERVICE_URL=http://127.0.0.1:3020`
 - `LEAVE_SERVICE_URL=http://127.0.0.1:3030`
 - `CHAT_SERVICE_URL=http://127.0.0.1:3040`
+- `PAYMENT_SERVICE_URL=http://127.0.0.1:3050`
 
 ## Local run order
 
@@ -56,6 +58,7 @@ cd apps/services/auth-service && npm run start:dev
 cd apps/services/timesheet-service && npm run start:dev
 cd apps/services/leave-service && npm run start:dev
 cd apps/services/chat-service && npm run start:dev
+cd apps/services/payment-service && npm run start:dev
 cd apps/api && npm run start:dev
 ```
 

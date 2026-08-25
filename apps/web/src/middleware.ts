@@ -19,7 +19,8 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/projects") ||
       pathname.startsWith("/timesheet") ||
       pathname.startsWith("/leave") ||
-      pathname.startsWith("/chat")) &&
+      pathname.startsWith("/chat") ||
+      pathname.startsWith("/billing")) &&
     !hasSession
   ) {
     const url = request.nextUrl.clone();
@@ -41,5 +42,7 @@ export const config = {
     "/timesheet/:path*",
     "/leave/:path*",
     "/chat/:path*",
+    "/billing",
+    "/billing/:path*",
   ],
 };
