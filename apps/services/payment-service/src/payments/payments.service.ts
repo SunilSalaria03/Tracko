@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import type { PublicUser } from '../users/user.types';
+import { PaymentEventsPublisher } from '../rabbitmq/payment-events.publisher';
 import type { Payment } from './payment.types';
 import { PaymentsRepository } from './payments.repository';
 
@@ -24,6 +25,7 @@ export class PaymentsService {
 
   constructor(
     private readonly paymentsRepository: PaymentsRepository,
+    private readonly paymentEventsPublisher: PaymentEventsPublisher,
     config: ConfigService,
   ) {
     this.secretKey = config.get<string>('STRIPE_SECRET_KEY') ?? '';
@@ -210,12 +212,25 @@ export class PaymentsService {
         ? session.payment_intent
         : session.payment_intent?.id;
 
-    await this.paymentsRepository.markStatus({
+    const paidAt = new Date();
+    const payment = await this.paymentsRepository.markStatus({
       id: paymentId,
       status: 'paid',
       paymentIntentId,
-      paidAt: new Date(),
+      paidAt,
     });
+
+    if (payment) {
+      await this.paymentEventsPublisher.publishPaid({
+        paymentId: payment.id,
+        userId: payment.userId,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        stripeCheckoutSessionId: payment.stripeCheckoutSessionId,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        paidAt: payment.paidAt ?? paidAt.toISOString(),
+      });
+    }
   }
 
   private async failFromSession(

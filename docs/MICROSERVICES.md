@@ -74,3 +74,19 @@ Or from repo root (PowerShell):
 - **Timesheet** / **Leave** / **Chat** validate JWT with the shared secret (cookie `tracko_token` or Bearer)
 - Chat also accepts Socket.IO connections (cookie on handshake) and pushes `chat.message`
 - Migrations run on each service startup against the shared DB (`schema_migrations` is shared, so each file applies once)
+
+## RabbitMQ (optional)
+
+Async events between services (HTTP gateway unchanged). First event: `payment.paid`.
+
+| Role | Service | Env |
+| --- | --- | --- |
+| Publisher | payment-service | `RABBITMQ_ENABLED=true`, `RABBITMQ_URL=amqp://guest:guest@localhost:5672` |
+| Consumer | chat-service | same |
+
+1. Start RabbitMQ locally (port **5672**)
+2. Set `RABBITMQ_ENABLED=true` in payment-service and chat-service `.env`
+3. Restart those two services
+4. Complete a Stripe test payment — chat-service logs `Received payment.paid`
+
+Stripe webhooks are unaffected: DB is updated first; RabbitMQ publish failures are logged only.

@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
 import { DatabaseModule } from './database/database.module';
+import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 import { UsersModule } from './users/users.module';
 
 /** Chat microservice — 1:1 employee messaging. Port 3040. */
@@ -14,6 +15,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuthModule,
     ChatModule,
+    RabbitmqModule,
   ],
   controllers: [AppController],
 })
